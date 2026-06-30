@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1b4332">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>🌿 OrtPWA - Raccolto Orto</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    /* Tab nav */
+    .tab-nav { display: flex; gap: 0.25rem; margin-bottom: 1rem; background: var(--card); border-radius: var(--radius); padding: 0.25rem; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .tab-btn { flex: 1; padding: 0.65rem 0.5rem; border: none; background: transparent; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.2s; color: var(--text-muted); }
+    .tab-btn.active { background: var(--primary); color: white; box-shadow: var(--shadow); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Select + helper */
+    .veg-empty { padding: 0.75rem 0.85rem; background: var(--accent-light); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.85rem; text-align: center; }
+    .veg-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; }
+    .veg-hint button { background: none; border: none; color: var(--primary); font-weight: 600; cursor: pointer; font-family: inherit; font-size: inherit; padding: 0; text-decoration: underline; }
+
+    /* Veg list */
+    .veg-list-item { display: flex; align-items: center; gap: 0.65rem; padding: 0.7rem 0; border-bottom: 1px solid var(--border); }
+    .veg-list-item:last-child { border-bottom: none; }
+    .veg-list-item .veg-emoji { font-size: 1.1rem; flex-shrink: 0; }
+    .veg-list-item .veg-name { flex: 1; font-weight: 500; font-size: 0.95rem; }
+    .veg-list-item .veg-actions { display: flex; gap: 0.3rem; }
+    .veg-list-item .veg-actions .btn-icon { width: 32px; height: 32px; border: none; border-radius: 50%; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; background: var(--accent-light); color: var(--text-muted); }
+    .veg-list-item .veg-actions .btn-icon:hover { background: var(--accent); color: var(--primary-dark); }
+    .veg-list-item .veg-actions .btn-icon.danger:hover { background: var(--danger-light); color: var(--danger); }
+    .veg-rename-input { flex: 1; padding: 0.4rem 0.6rem; border: 2px solid var(--primary); border-radius: var(--radius-sm); font-size: 0.95rem; font-family: inherit; outline: none; }
+    .quick-add { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .quick-add input { flex: 1; padding: 0.6rem 0.75rem; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 0.95rem; font-family: inherit; }
+    .quick-add input:focus { outline: none; border-color: var(--primary); }
+    .harvest-item { cursor: pointer; border-radius: var(--radius-sm); padding: 0.85rem 0.5rem; transition: background 0.15s; }
+    .harvest-item:active { background: var(--accent-light); }
+
+    .data-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .data-bar .btn { flex: 1; min-width: 140px; }
+
+    .storage-info { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <h1>🌿 OrtPWA</h1>
+      <nav>
+        <a href="/" class="active">Raccolta</a>
+        <a href="/stats.html">Statistiche</a>
+        <button class="header-logout" id="logoutBtn" title="Esci">🚪</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="raccolta">🥬 Raccolta</button>
+      <button class="tab-btn" data-tab="ortaggi">🌱 Ortaggi</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-raccolta">
+      <div class="card">
+        <div class="card-title">Aggiungi Raccolta</div>
+        <form id="harvestForm">
+          <div class="form-group">
+            <label for="vegInput">Ortaggio</label>
+            <div id="vegSelectContainer"><!-- popolato da JS --></div>
+            <p class="veg-hint">Manca un ortaggio? <button type="button" data-go-ortaggi>Aggiungilo nella scheda Ortaggi</button></p>
+          </div>
+          <div class="form-group">
+            <label for="weightInput">Peso (kg)</label>
+            <input type="number" id="weightInput" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal" required>
+          </div>
+          <div class="form-group">
+            <label for="dateInput">Data</label>
+            <input type="date" id="dateInput" required>
+          </div>
+          <div class="form-group">
+            <label for="notesInput">Note (opzionale)</label>
+            <textarea id="notesInput" rows="2" placeholder="Es: Belli e grossi..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="submitBtn">➕ Aggiungi</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ultime Raccolte</div>
+        <div id="harvestList">
+          <div class="empty-state"><div class="emoji">🌱</div><p>Nessuna raccolta ancora.<br>Inizia ad aggiungere!</p></div>
+        </div>
+      </div>
+
+      <div class="data-bar">
+        <a class="btn btn-secondary" href="/api/export/csv" download>📥 Esporta CSV</a>
+        <button class="btn btn-secondary" id="forceUpdateBtn" title="Scarica l'ultima versione del SW">🔄 Aggiorna app</button>
+      </div>
+      <p class="storage-info" id="storageInfo">Backend connesso ✓</p>
+    </div>
+
+    <div class="tab-panel" id="tab-ortaggi">
+      <div class="card">
+        <div class="card-title">Gestisci Ortaggi</div>
+        <div class="quick-add">
+          <input type="text" id="newVegInput" placeholder="Aggiungi nuovo ortaggio..." autocomplete="off">
+          <button class="btn btn-primary btn-sm" id="addVegBtn">➕</button>
+        </div>
+        <div id="vegList"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>✏️ Modifica Raccolta</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="editForm">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label for="editVegInput">Ortaggio</label>
+          <div id="editVegSelectContainer"></div>
+        </div>
+        <div class="form-group">
+          <label for="editWeight">Peso (kg)</label>
+          <input type="number" id="editWeight" step="0.01" min="0.01" inputmode="decimal" required>
+        </div>
+        <div class="form-group">
+          <label for="editDate">Data</label>
+          <input type="date" id="editDate" required>
+        </div>
+        <div class="form-group">
+          <label for="editNotes">Note</label>
+          <textarea id="editNotes" rows="2"></textarea>
+        </div>
+        <div class="btn-group">
+          <button type="submit" class="btn btn-primary" style="flex:1;">💾 Salva</button>
+          <button type="button" class="btn btn-danger" id="deleteHarvestBtn">🗑️ Elimina</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/auth.js"></script>
+  <script>
+    Auth.requireAuth();
+
+    const API = '';
+    let vegetables = [];
+    let harvests = [];
+    let activeIndices = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById('dateInput').value = today;
+      loadAll();
+      document.body.addEventListener('click', (e) => {
+        const go = e.target.closest('[data-go-ortaggi]');
+        if (go) switchToTab('ortaggi');
+      });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      if (!confirm('Vuoi davvero uscire?')) return;
+      Auth.logout();
+      location.replace('/login.html');
+    });
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'ortaggi') renderVegList();
+      });
+    });
+    function switchToTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+      if (name === 'ortaggi') renderVegList();
+    }
+
+    async function api(method, url, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(API + url, opts);
+      if (!res.ok) {
+        let err = 'Errore ' + res.status;
+        try { const j = await res.json(); err = j.error || err; } catch {}
+        throw new Error(err);
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function loadAll() {
+      try {
+        const [vegRes, harvRes] = await Promise.all([
+          api('GET', '/api/vegetables'),
+          api('GET', '/api/harvests')
+        ]);
+        vegetables = vegRes;
+        harvests = harvRes;
+        renderVegSelect();
+        renderEditVegSelect();
+        renderHarvests();
+        document.getElementById('storageInfo').textContent = `Backend connesso ✓ · ${vegetables.length} ortaggi · ${harvests.length} raccolte`;
+      } catch (e) {
+        showToast('❌ Backend non raggiungibile: ' + e.message, true);
+        document.getElementById('storageInfo').textContent = '❌ Backend non raggiungibile';
+      }
+    }
+
+    function renderVegSelect() {
+      const c = document.getElementById('vegSelectContainer');
+      if (vegetables.length === 0) {
+        c.innerHTML = `<div class="veg-empty">🌱 Nessun ortaggio. <button type="button" data-go-ortaggi style="background:none;border:none;color:var(--primary);font-weight:600;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;">Aggiungilo dalla scheda Ortaggi</button></div>`;
+        return;
+      }
+      const opts = vegetables.slice().sort((a, b) => a.name.localeCompare(b.name, 'it'))
+        .map(v => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('');
+      c.innerHTML = `<select id="vegInput" required><option value="">— Seleziona ortaggio —</option>${opts}</select>`;
+    }
+    function renderEditVegSelect(selectedId) {
+      const c = document.getElementById('editVegSelectContainer');
+      if (vegetables.length === 0) {
+        c.innerHTML = `<div class="veg-empty">Nessun ortaggio. Aggiungine uno nella scheda Ortaggi.</div>`;
+        return;
+      }
+      const opts = vegetables.slice().sort((a, b) => a.name.localeCompare(b.name, 'it'))
+        .map(v => `<option value="${v.id}" ${v.id === selectedId ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('');
+      c.innerHTML = `<select id="editVegInput" required><option value="">— Seleziona ortaggio —</option>${opts}</select>`;
+    }
+
+    // Form submit
+    document.getElementById('harvestForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const vegInput = document.getElementById('vegInput');
+      const vegId = vegInput && vegInput.value ? parseInt(vegInput.value) : null;
+      const weight = parseFloat(document.getElementById('weightInput').value);
+      const date = document.getElementById('dateInput').value;
+      const notes = document.getElementById('notesInput').value;
+      if (!vegId) { showToast('Seleziona un ortaggio', true); return; }
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true; btn.textContent = '⏳ Salvataggio...';
+      try {
+        await api('POST', '/api/harvests', { vegetable_id: vegId, weight, date, notes });
+        document.getElementById('harvestForm').reset();
+        document.getElementById('dateInput').value = new Date().toISOString().slice(0, 10);
+        renderVegSelect();
+        showToast('✅ Raccolta aggiunta!');
+        await loadAll();
+      } catch (err) { showToast('❌ ' + err.message, true); }
+      finally { btn.disabled = false; btn.textContent = '➕ Aggiungi'; }
+    });
+
+    // Render
+    function renderHarvests() {
+      const c = document.getElementById('harvestList');
+      if (harvests.length === 0) {
+        c.innerHTML = `<div class="empty-state"><div class="emoji">🌱</div><p>Nessuna raccolta ancora.<br>Inizia ad aggiungere!</p></div>`;
+        return;
+      }
+      c.innerHTML = harvests.map(h => `
+        <div class="harvest-item" data-id="${h.id}">
+          <div class="harvest-icon">🥬</div>
+          <div class="harvest-info">
+            <div class="harvest-name">${escapeHtml(h.vegetable_name)}</div>
+            <div class="harvest-meta">
+              <span>📅 ${formatDate(h.date)}</span>
+              ${h.notes ? `<span>📝 ${escapeHtml(h.notes)}</span>` : ''}
+            </div>
+          </div>
+          <div class="harvest-weight">${h.weight} kg</div>
+        </div>`).join('');
+      c.querySelectorAll('.harvest-item').forEach(el => {
+        el.addEventListener('click', () => openEdit(parseInt(el.dataset.id)));
+      });
+    }
+
+    function openEdit(id) {
+      const h = harvests.find(x => x.id === id);
+      if (!h) return;
+      document.getElementById('editId').value = h.id;
+      renderEditVegSelect(h.vegetable_id);
+      document.getElementById('editWeight').value = h.weight;
+      document.getElementById('editDate').value = h.date;
+      document.getElementById('editNotes').value = h.notes || '';
+      document.getElementById('editModal').classList.add('show');
+    }
+    function closeModal() { document.getElementById('editModal').classList.remove('show'); }
+    document.getElementById('editModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModal(); });
+
+    document.getElementById('editForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('editId').value);
+      const editVeg = document.getElementById('editVegInput');
+      const vegId = editVeg && editVeg.value ? parseInt(editVeg.value) : null;
+      if (!vegId) { showToast('Seleziona un ortaggio', true); return; }
+      try {
+        await api('PUT', '/api/harvests/' + id, {
+          vegetable_id: vegId,
+          weight: parseFloat(document.getElementById('editWeight').value),
+          date: document.getElementById('editDate').value,
+          notes: document.getElementById('editNotes').value
+        });
+        closeModal();
+        showToast('✅ Raccolta modificata!');
+        await loadAll();
+      } catch (err) { showToast('❌ ' + err.message, true); }
+    });
+
+    document.getElementById('deleteHarvestBtn').addEventListener('click', async () => {
+      const id = parseInt(document.getElementById('editId').value);
+      if (!confirm('Eliminare questa raccolta?')) return;
+      try {
+        await api('DELETE', '/api/harvests/' + id);
+        closeModal();
+        showToast('🗑️ Raccolta eliminata');
+        await loadAll();
+      } catch (err) { showToast('❌ ' + err.message, true); }
+    });
+
+    // Vegetable management
+    function renderVegList() {
+      const c = document.getElementById('vegList');
+      if (vegetables.length === 0) {
+        c.innerHTML = `<div class="empty-state"><div class="emoji">🌱</div><p>Nessun ortaggio ancora.<br>Aggiungine uno sopra!</p></div>`;
+        return;
+      }
+      c.innerHTML = vegetables.map(v => `
+        <div class="veg-list-item" data-id="${v.id}">
+          <span class="veg-emoji">🥬</span>
+          <span class="veg-name" id="vegname-${v.id}">${escapeHtml(v.name)}</span>
+          <div class="veg-actions">
+            <button class="btn-icon" data-act="rename" title="Rinomina">✏️</button>
+            <button class="btn-icon danger" data-act="delete" title="Elimina">🗑️</button>
+          </div>
+        </div>`).join('');
+      c.querySelectorAll('.veg-list-item').forEach(el => {
+        const id = parseInt(el.dataset.id);
+        el.querySelector('[data-act="rename"]').addEventListener('click', () => startRename(id));
+        el.querySelector('[data-act="delete"]').addEventListener('click', () => deleteVegetable(id));
+      });
+    }
+
+    document.getElementById('addVegBtn').addEventListener('click', addVegetable);
+    document.getElementById('newVegInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addVegetable(); }
+    });
+    async function addVegetable() {
+      const input = document.getElementById('newVegInput');
+      const name = input.value.trim();
+      if (!name) return;
+      try {
+        const v = await api('POST', '/api/vegetables', { name });
+        if (!vegetables.find(x => x.id === v.id)) vegetables.push(v);
+        input.value = '';
+        showToast('✅ Ortaggio aggiunto!');
+        renderVegList();
+        renderVegSelect();
+        document.getElementById('storageInfo').textContent = `Backend connesso ✓ · ${vegetables.length} ortaggi · ${harvests.length} raccolte`;
+      } catch (err) { showToast('❌ ' + err.message, true); }
+    }
+    function startRename(id) {
+      const veg = vegetables.find(v => v.id === id);
+      if (!veg) return;
+      const itemEl = document.querySelector(`.veg-list-item[data-id="${id}"]`);
+      const nameEl = document.getElementById('vegname-' + id);
+      const actionsEl = itemEl.querySelector('.veg-actions');
+      nameEl.outerHTML = `<input class="veg-rename-input" id="rename-${id}" value="${escapeHtml(veg.name)}" autofocus>`;
+      actionsEl.innerHTML = `
+        <button class="btn-icon" data-act="confirm" title="Salva">✅</button>
+        <button class="btn-icon danger" data-act="cancel" title="Annulla">❌</button>`;
+      actionsEl.querySelector('[data-act="confirm"]').addEventListener('click', () => confirmRename(id));
+      actionsEl.querySelector('[data-act="cancel"]').addEventListener('click', () => renderVegList());
+      const input = document.getElementById('rename-' + id);
+      input.focus(); input.select();
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') confirmRename(id);
+        if (e.key === 'Escape') renderVegList();
+      });
+    }
+    async function confirmRename(id) {
+      const input = document.getElementById('rename-' + id);
+      if (!input) return;
+      const newName = input.value.trim();
+      if (!newName) return;
+      try {
+        const v = await api('PUT', '/api/vegetables/' + id, { name: newName });
+        const veg = vegetables.find(x => x.id === id);
+        if (veg) veg.name = v.name;
+        showToast('✅ Ortaggio rinominato!');
+        renderVegList();
+        renderVegSelect();
+      } catch (err) { showToast('❌ ' + err.message, true); }
+    }
+    async function deleteVegetable(id) {
+      const veg = vegetables.find(v => v.id === id);
+      if (!veg) return;
+      if (!confirm(`Eliminare "${veg.name}" e tutte le sue raccolte?`)) return;
+      try {
+        await api('DELETE', '/api/vegetables/' + id);
+        vegetables = vegetables.filter(v => v.id !== id);
+        showToast('🗑️ Ortaggio eliminato');
+        renderVegList();
+        await loadAll();
+      } catch (err) { showToast('❌ ' + err.message, true); }
+    }
+
+    // Forza aggiornamento SW
+    document.getElementById('forceUpdateBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('forceUpdateBtn');
+      btn.disabled = true; btn.textContent = '⏳ Aggiornamento...';
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        showToast('✅ Cache svuotata');
+        setTimeout(() => location.replace(location.pathname + '?v=' + Date.now()), 500);
+      } catch (err) {
+        showToast('❌ ' + err.message, true);
+        btn.disabled = false; btn.textContent = '🔄 Aggiorna app';
+      }
+    });
+
+    // Utils
+    function formatDate(d) { const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
+    function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = 'toast' + (isError ? ' error' : '');
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

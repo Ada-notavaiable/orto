@@ -1,0 +1,23 @@
+# Esclude dal build context tutto ciò che non serve nell'immagine finale.
+.git
+.gitignore
+node_modules
+npm-debug.log*
+
+# Database locale e log (a runtime vive nel volume)
+orto.db
+orto.db-journal
+*.log
+
+# Documentazione e file specifici del dev
+README.md
+DEPLOY.md
+prompt.txt
+
+# File di sistema / IDE / ambiente
+.DS_Store
+.vscode
+.idea
+.env
+.env.*
+*.md

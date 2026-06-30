@@ -1,0 +1,50 @@
+# Stack OrtPWA per Portainer su Orange Pi Zero (o qualsiasi Docker host).
+# Due modalità di deploy supportate:
+#   A) Build locale: `docker compose up -d --build`
+#   B) Da Portainer "Stacks → Repository" con URL git (vedi README)
+
+services:
+  ortopwa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ortopwa:1.0.0
+    container_name: ortopwa
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - PORT=3000
+      - DB_PATH=/data/orto.db
+      - NODE_ENV=production
+
+    volumes:
+      # Volume nominato per la persistenza del DB.
+      # Dati sopravvivono a restart, update, rimozione del container.
+      - ortodb:/data
+
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "node -e \"require('http').get('http://localhost:3000/api/stats',r=>process.exit(r.statusCode?0:1)).on('error',()=>process.exit(1))\""
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    # Limiti risorse per Orange Pi Zero (256-512MB totali)
+    mem_limit: 256m
+    mem_reservation: 64m
+
+    # Rotazione log (la microSD ringrazia)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  ortodb:
+    name: ortodb
