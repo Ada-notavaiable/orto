@@ -182,14 +182,14 @@ orto/
 ├── docker-compose.yml     # Stack Portainer-ready
 ├── entrypoint.sh          # Chown /data + drop a utente node
 ├── .dockerignore
-├── sw.js                  # Service Worker (cache-first static, /api sempre network)
-├── manifest.json          # Manifest PWA
-├── auth.js                # Auth client-side (SHA-256 + sessionStorage)
-├── public/                # Asset statici serviti da Express
+├── public/                # Asset statici serviti da Express dalla cartella /public
 │   ├── index.html         # Pagina principale
 │   ├── stats.html         # Statistiche live
 │   ├── login.html         # Login
 │   ├── style.css          # Tema
+│   ├── auth.js            # Auth client-side (SHA-256 + sessionStorage)
+│   ├── sw.js              # Service Worker (cache-first static, /api sempre network)
+│   ├── manifest.json      # Manifest PWA
 │   ├── icon-192.png
 │   └── icon-512.png
 └── README.md
