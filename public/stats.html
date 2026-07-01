@@ -34,7 +34,6 @@
       <nav>
         <a href="/">Raccolta</a>
         <a href="/stats.html" class="active">Statistiche</a>
-        <button class="header-logout" id="logoutBtn" title="Esci">🚪</button>
       </nav>
     </div>
   </header>
@@ -81,18 +80,9 @@
     <div class="last-update" id="lastUpdate"></div>
   </main>
 
-  <script src="/auth.js"></script>
   <script>
-    Auth.requireAuth();
-
     let refreshInterval = null;
     let previousGrandTotal = null;
-
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      if (!confirm('Vuoi davvero uscire?')) return;
-      Auth.logout();
-      location.replace('/login.html');
-    });
 
     document.addEventListener('DOMContentLoaded', () => { loadStats(); setupAutoRefresh(); });
     document.getElementById('autoRefresh').addEventListener('change', setupAutoRefresh);

@@ -53,7 +53,6 @@
       <nav>
         <a href="/" class="active">Raccolta</a>
         <a href="/stats.html">Statistiche</a>
-        <button class="header-logout" id="logoutBtn" title="Esci">🚪</button>
       </nav>
     </div>
   </header>
@@ -98,7 +97,9 @@
 
       <div class="data-bar">
         <a class="btn btn-secondary" href="/api/export/csv" download>📥 Esporta CSV</a>
+        <button class="btn btn-secondary" id="importCsvBtn">📤 Importa CSV</button>
         <button class="btn btn-secondary" id="forceUpdateBtn" title="Scarica l'ultima versione del SW">🔄 Aggiorna app</button>
+        <input type="file" id="importCsvFile" accept=".csv,text/csv" hidden>
       </div>
       <p class="storage-info" id="storageInfo">Backend connesso ✓</p>
     </div>
@@ -150,10 +151,25 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/auth.js"></script>
-  <script>
-    Auth.requireAuth();
+  <!-- Import Modal -->
+  <div class="modal-overlay" id="importModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>📤 Importa CSV</h2>
+        <button class="modal-close" id="importModalClose">&times;</button>
+      </div>
+      <p style="font-size:0.95rem;margin-bottom:0.5rem;">File selezionato: <strong id="importFileName">—</strong></p>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">Righe rilevate: <span id="importRowCount">…</span></p>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">Come vuoi importare i dati?</p>
+      <div class="btn-group" style="margin-bottom:0.75rem;">
+        <button class="btn btn-primary" id="importAppendBtn" style="flex:1;">➕ Aggiungi ai dati</button>
+        <button class="btn btn-danger" id="importReplaceBtn" style="flex:1;">🔄 Sostituisci tutto</button>
+      </div>
+      <p class="modal-hint">⚠️ <strong>Sostituisci tutto</strong> elimina tutte le raccolte e gli ortaggi esistenti prima di importare. Da usare solo per ripristinare un backup completo.</p>
+    </div>
+  </div>
 
+  <script>
     const API = '';
     let vegetables = [];
     let harvests = [];
@@ -167,12 +183,6 @@
         const go = e.target.closest('[data-go-ortaggi]');
         if (go) switchToTab('ortaggi');
       });
-    });
-
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      if (!confirm('Vuoi davvero uscire?')) return;
-      Auth.logout();
-      location.replace('/login.html');
     });
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -416,6 +426,86 @@
         await loadAll();
       } catch (err) { showToast('❌ ' + err.message, true); }
     }
+
+    // Import CSV dal backup
+    let importSelectedFile = null;
+    const importFileInput = document.getElementById('importCsvFile');
+    const importModal = document.getElementById('importModal');
+    const importRowCountEl = document.getElementById('importRowCount');
+    const importFileNameEl = document.getElementById('importFileName');
+
+    function countCsvRows(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result || '').replace(/^\uFEFF/, '');
+          const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+          // la prima riga è l'header
+          resolve(Math.max(0, lines.length - 1));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    }
+
+    document.getElementById('importCsvBtn').addEventListener('click', () => {
+      importFileInput.value = ''; // reset per poter riselezionare lo stesso file
+      importFileInput.click();
+    });
+    importFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      importSelectedFile = file;
+      importFileNameEl.textContent = file.name;
+      importRowCountEl.textContent = 'conteggio…';
+      importModal.classList.add('show');
+      try {
+        const n = await countCsvRows(file);
+        importRowCountEl.textContent = n + (n === 1 ? ' riga' : ' righe');
+      } catch (err) {
+        importRowCountEl.textContent = 'impossibile leggere il file';
+        showToast('❌ File non leggibile: ' + err.message, true);
+      }
+    });
+    function closeImportModal() { importModal.classList.remove('show'); importSelectedFile = null; }
+    document.getElementById('importModalClose').addEventListener('click', closeImportModal);
+    importModal.addEventListener('click', (e) => { if (e.target === importModal) closeImportModal(); });
+
+    async function uploadImportCSV(mode) {
+      if (!importSelectedFile) return;
+      const appendBtn = document.getElementById('importAppendBtn');
+      const replaceBtn = document.getElementById('importReplaceBtn');
+      appendBtn.disabled = true; replaceBtn.disabled = true;
+      const oldAppendText = appendBtn.textContent;
+      const oldReplaceText = replaceBtn.textContent;
+      appendBtn.textContent = '⏳ Importazione…';
+      replaceBtn.textContent = '⏳ Importazione…';
+      try {
+        const res = await fetch(`/api/import/csv?mode=${mode}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/csv' },
+          body: importSelectedFile
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('Errore ' + res.status));
+        const msg = `✅ Import ${mode}: ${data.imported} raccolte · ${data.vegetables_created} ortaggi nuovi · ${data.skipped} saltati${data.errors && data.errors.length ? ' · ' + data.errors.length + ' errori' : ''}`;
+        showToast(msg);
+        closeImportModal();
+        await loadAll();
+      } catch (err) {
+        showToast('❌ Import fallito: ' + err.message, true);
+      } finally {
+        appendBtn.disabled = false; replaceBtn.disabled = false;
+        appendBtn.textContent = oldAppendText;
+        replaceBtn.textContent = oldReplaceText;
+      }
+    }
+    document.getElementById('importAppendBtn').addEventListener('click', () => uploadImportCSV('append'));
+    document.getElementById('importReplaceBtn').addEventListener('click', () => {
+      if (confirm('SOSTITUIRE TUTTI i dati esistenti con quelli del CSV? Questa azione non è recuperabile.')) {
+        uploadImportCSV('replace');
+      }
+    });
 
     // Forza aggiornamento SW
     document.getElementById('forceUpdateBtn').addEventListener('click', async () => {

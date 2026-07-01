@@ -164,6 +164,144 @@ app.get('/api/export/csv', (req, res) => {
   res.send('\uFEFF' + header + body);
 });
 
+// --- Import CSV ---
+// Modalità:
+//   mode=append   (default): aggiunge le righe a quelle esistenti, crea ortaggi
+//                           mancanti, salta duplicati esatti.
+//   mode=replace:             cancella PRIMA harvests e vegetables, poi importa.
+
+// Parser CSV tollerante: gestisce virgolette, escape `""`, virgole interne.
+// Non gestisce newline dentro campi virgolettati (non usati dall'esportazione).
+function parseCSV(text) {
+  const cleaned = String(text || '').replace(/^\uFEFF/, '');
+  const lines = cleaned.split(/\r?\n/).filter(l => l.length > 0);
+  return lines.map(line => {
+    const out = [];
+    let val = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i], nx = line[i + 1];
+      if (inQuotes && c === '"' && nx === '"') { val += '"'; i++; }
+      else if (c === '"') inQuotes = !inQuotes;
+      else if (c === ',' && !inQuotes) { out.push(val); val = ''; }
+      else val += c;
+    }
+    out.push(val);
+    return out;
+  }).filter(row => row.length > 1 || (row[0] || '').length > 0);
+}
+
+const importTextParser = express.text({ type: '*/*', limit: '10mb' });
+
+app.post('/api/import/csv', importTextParser, (req, res) => {
+  const mode = req.query.mode === 'replace' ? 'replace' : 'append';
+  if (typeof req.body !== 'string' || !req.body.trim()) {
+    return res.status(400).json({ error: 'Nessun CSV ricevuto. Invia il file come body text/csv.' });
+  }
+
+  const rows = parseCSV(req.body);
+  if (rows.length < 2) return res.status(400).json({ error: 'CSV vuoto o senza righe dati.' });
+
+  const header = rows[0].map(h => String(h || '').trim().toLowerCase());
+  const idxVeg = header.findIndex(h => h.includes('ortaggio') || h.includes('vegetable') || h === 'name');
+  const idxWeight = header.findIndex(h => h.includes('peso') || h.includes('weight'));
+  const idxDate = header.findIndex(h => h === 'data' || h.includes('date'));
+  const idxNotes = header.findIndex(h => h === 'note' || h.includes('notes'));
+
+  if (idxVeg === -1 || idxWeight === -1 || idxDate === -1) {
+    return res.status(400).json({ error: 'CSV senza colonne obbligatorie (servono Ortaggio/Vegetable, Peso/Weight, Data/Date).' });
+  }
+
+  let imported = 0;
+  let vegetablesCreated = 0;
+  let skipped = 0;
+  const errors = [];
+
+  try {
+    db.exec('BEGIN TRANSACTION;');
+
+    if (mode === 'replace') {
+      // PRIMA harvests (FK), POI vegetables. Con ON DELETE CASCADE l'ordine è
+      // logico ma non strettamente necessario in SQLite. Comunque meglio esplicito.
+      db.run('DELETE FROM harvests;');
+      db.run('DELETE FROM vegetables;');
+    }
+
+    const vegMap = new Map(
+      queryAll('SELECT id, name FROM vegetables')
+        .map(v => [String(v.name).toLowerCase(), v.id])
+    );
+
+    // Dedup solo in modalità append: salta righe identiche a quelle già presenti.
+    const existingKeys = mode === 'append'
+      ? new Set(
+          queryAll('SELECT vegetable_id, weight, date, notes FROM harvests')
+            .map(h => `${h.vegetable_id}|${h.weight}|${h.date}|${String(h.notes || '').trim()}`)
+        )
+      : new Set();
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const neededMax = Math.max(idxVeg, idxWeight, idxDate);
+      if (!row || row.length <= neededMax) { skipped++; continue; }
+
+      const vegName = String(row[idxVeg] || '').trim();
+      const weight = parseFloat(String(row[idxWeight] || '').replace(',', '.'));
+      let date = String(row[idxDate] || '').trim();
+      const notes = idxNotes !== -1 ? String(row[idxNotes] || '').trim() : '';
+
+      if (!vegName || isNaN(weight) || weight <= 0) {
+        skipped++;
+        if (errors.length < 20) errors.push(`Riga ${i + 1}: ortaggio o peso non valido.`);
+        continue;
+      }
+
+      // Accetta anche "DD/MM/YYYY" convertendolo in "YYYY-MM-DD".
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)) {
+        const [d, m, y] = date.split('/');
+        date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        skipped++;
+        if (errors.length < 20) errors.push(`Riga ${i + 1}: data non valida (atteso YYYY-MM-DD).`);
+        continue;
+      }
+
+      let vegId = vegMap.get(vegName.toLowerCase());
+      if (!vegId) {
+        db.run('INSERT INTO vegetables (name) VALUES (?)', [vegName]);
+        vegId = lastInsertId();
+        vegMap.set(vegName.toLowerCase(), vegId);
+        vegetablesCreated++;
+      }
+
+      const dedupeKey = `${vegId}|${weight}|${date}|${notes}`;
+      if (existingKeys.has(dedupeKey)) { skipped++; continue; }
+
+      db.run('INSERT INTO harvests (vegetable_id, weight, date, notes) VALUES (?, ?, ?, ?)',
+        [vegId, weight, date, notes]);
+      existingKeys.add(dedupeKey);
+      imported++;
+    }
+
+    db.exec('COMMIT;');
+    saveDB();
+
+    res.json({
+      ok: true,
+      mode,
+      imported,
+      vegetables_created: vegetablesCreated,
+      skipped,
+      errors
+    });
+  } catch (err) {
+    try { db.exec('ROLLBACK;'); } catch (_) {}
+    console.error('import error:', err.message);
+    res.status(500).json({ error: 'Errore DB durante import: ' + err.message });
+  }
+});
+
 // --- Harvests ---
 
 app.get('/api/harvests', (req, res) => {

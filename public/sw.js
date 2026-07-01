@@ -3,15 +3,13 @@
 // navigazione offline di fallback.
 // Bump CACHE_NAME su ogni deploy per forzare l'aggiornamento sui client.
 
-const CACHE_NAME = 'ortopwa-v3-backend';
+const CACHE_NAME = 'ortopwa-v4-noauth';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './login.html',
   './stats.html',
   './style.css',
   './manifest.json',
-  './auth.js',
   './icon-192.png',
   './icon-512.png'
 ];

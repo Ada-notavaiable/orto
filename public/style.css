@@ -82,21 +82,6 @@ body {
   background: rgba(255,255,255,0.2);
 }
 
-.header-logout {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.25);
-  color: white;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius-sm);
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  font-family: inherit;
-  line-height: 1;
-}
-.header-logout:hover { background: rgba(255,255,255,0.3); }
-.header-logout:active { transform: scale(0.95); }
-
 /* --- Main content --- */
 .main {
   max-width: 600px;
@@ -500,60 +485,13 @@ body {
   line-height: 1;
 }
 
-/* --- Login page --- */
-.login-container {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
-}
-
-.login-card {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 2rem 1.5rem;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-}
-
-.login-icon {
-  font-size: 3rem;
-  margin-bottom: 0.25rem;
-  line-height: 1;
-}
-
-.login-card h1 {
-  font-size: 1.6rem;
-  color: var(--primary-dark);
-  margin-bottom: 0.25rem;
-}
-
-.login-subtitle {
+/* --- Modal hint (per import warning) --- */
+.modal-hint {
   color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
-}
-
-.login-error {
-  color: var(--danger);
-  font-size: 0.85rem;
-  min-height: 1.2em;
-  margin-top: 0.75rem;
-  font-weight: 500;
-}
-
-.login-hint {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  margin-top: 1.25rem;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
   line-height: 1.4;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  text-align: left;
 }
 
 /* --- Responsive --- */

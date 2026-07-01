@@ -6,13 +6,12 @@ PWA (Progressive Web App) per tracciare il peso degli ortaggi raccolti dall'orto
 
 ## ✨ Funzionalità
 
-- 🔐 Login protetto (utente + password hashata con SHA-256, lato client)
 - 🥬 Menu a tendina con gli ortaggi aggiunti nella scheda Ortaggi
 - ⚖️ Registra pesi, data e note per ogni raccolta
 - ✏️ Modifica o elimina raccolte toccando una riga
 - 📊 Pagina statistiche con totali **in tempo reale** (auto-refresh 2s)
 - 📈 Grafici a barre per ortaggio e per mese
-- 📥 Esporta in CSV (Excel/LibreOffice)
+- 📥 Esporta in CSV (backup) + 📤 Importa da CSV (ripristino)
 - 🔄 Bottone "Aggiorna app" per scaricare subito l'ultima versione del Service Worker
 - 📱 Installabile come app su iOS e Android
 
@@ -86,7 +85,7 @@ Dal telefono (collegato al **Wi-Fi di casa**), apri:
 http://192.168.1.42:3000
 ```
 
-Login: `ada` / `4321` (cambialo subito, vedi sotto).
+Nessun login richiesto.
 
 ### Passo 4 — Installa come PWA
 
@@ -119,35 +118,14 @@ Se non hai il webhook:
 Quando cambi asset statici (HTML, CSS, JS, icone), il telefono potrebbe ancora usare la versione cached. Per forzare l'aggiornamento:
 
 1. Apri `sw.js`
-2. Cambia `CACHE_NAME = 'ortopwa-v3-backend'` → `'ortopwa-v4-backend'`
+2. Cambia `const CACHE_NAME` → nuovo nome (es. `'ortopwa-v5-noauth'`)
 3. Pusha
 
 Alla prossima apertura, il nuovo SW sostituisce la cache.
 
 ---
 
-## 🔐 Login & credenziali
-
-### Default
-
-- **Utente**: `ada`
-- **Password**: `4321`
-
-### Cambiarle
-
-1. Apri `auth.js`
-2. Modifica `USERNAME`
-3. Calcola l'hash della nuova password:
-   ```bash
-   node -e "const c=require('crypto');console.log(c.createHash('sha256').update('NUOVA_PASSWORD'+'orto-salt-2024').digest('hex'))"
-   ```
-4. Sostituisci `HASHED_PW` con l'output
-5. `git commit -m "nuove credenziali" && git push`
-6. Portainer rebuilda → tutti i dispositivi devono riautenticarsi
-
----
-
-## 💾 Backup del database
+## 💾 Backup e ripristino del database
 
 Il database è un singolo file `orto.db` montato come volume Docker (`ortodb:/data`).
 
@@ -166,9 +144,16 @@ Sulla macchina che ospita Docker (Orange Pi / Pi / NAS):
 docker run --rm -v ortodb:/data -v $(pwd):/backup alpine cp /data/orto.db /backup/orto-backup-$(date +%Y%m%d).db
 ```
 
-### Esportare in CSV (dal telefono o PC)
+### Esportare / Importare in CSV (dal telefono o PC)
 
-Dalla pagina principale → bottone **📥 Esporta CSV**. Salva un CSV con tutte le raccolte (apribile in Excel).
+Dalla pagina principale:
+
+- **📥 Esporta CSV** — scarica un CSV con tutte le raccolte (apribile in Excel/LibreOffice). Usalo per il backup.
+- **📤 Importa CSV** — carica un CSV (anche quello generato da un'Esporta precedente). All'apertura del file ti chiede:
+  - **➕ Aggiungi ai dati** (default): inserisce solo le righe nuove, salta i duplicati esatti, crea ortaggi mancanti. Sicuro, idempotente.
+  - **🔄 Sostituisci tutto**: prima cancella harvests e vegetables, poi importa. Da usare solo per un ripristino completo.
+
+L'import è atomico: o va tutto a buon fine, o non modifica nulla. Caricamenti malformati vengono ignorati con un report riga-per-riga nel toast.
 
 ---
 
@@ -176,18 +161,16 @@ Dalla pagina principale → bottone **📥 Esporta CSV**. Salva un CSV con tutte
 
 ```
 orto/
-├── server.js              # Backend Express + SQLite
+├── server.js              # Backend Express + SQLite (API: vegetables, harvests, stats, export, import)
 ├── package.json           # Dipendenze Node
 ├── Dockerfile             # Immagine multi-arch (armv7 + arm64 + amd64)
 ├── docker-compose.yml     # Stack Portainer-ready
 ├── entrypoint.sh          # Chown /data + drop a utente node
 ├── .dockerignore
 ├── public/                # Asset statici serviti da Express dalla cartella /public
-│   ├── index.html         # Pagina principale
+│   ├── index.html         # Pagina principale (raccolta + ortaggi + import/export)
 │   ├── stats.html         # Statistiche live
-│   ├── login.html         # Login
 │   ├── style.css          # Tema
-│   ├── auth.js            # Auth client-side (SHA-256 + sessionStorage)
 │   ├── sw.js              # Service Worker (cache-first static, /api sempre network)
 │   ├── manifest.json      # Manifest PWA
 │   ├── icon-192.png
@@ -204,11 +187,10 @@ Questo setup è pensato per **uso famiglia su LAN**:
 - ✅ **Dati centralizzati** sul tuo Docker host (non sul telefono)
 - ✅ Più dispositivi accedono agli stessi dati
 - ✅ **Backup centralizzati** automatici via cron
-- ⚠️ **L'auth è puramente client-side**: chiunque sia sulla LAN può fare `curl http://pi:3000/api/harvests -d '{...}'` e modificare i dati. L'auth impedisce l'accesso casuale dal browser, **non** è una protezione server-side.
-- ⚠️ L'hash della password è nel sorgente del frontend (SHA-256 + sale), visibile a chiunque ispezioni la pagina
+- ⚠️ **Nessuna autenticazione**: chiunque sia sulla LAN può fare `curl http://pi:3000/api/harvests -d '{...}'` e modificare i dati.
 - ⚠️ Non esporre la porta 3000 direttamente a Internet (Portainer + Cloudflare Tunnel o Tailscale se serve accesso remoto)
 
-Per multi-utente o accesso remoto sicuro, valuta di aggiungere un auth server-side (OAuth, JWT, reverse-proxy con BasicAuth, ecc.).
+Se in futuro vuoi proteggere l'accesso, valuta un reverse-proxy con BasicAuth o un tunnel autenticato.
 
 ---
 
@@ -223,8 +205,8 @@ Per multi-utente o accesso remoto sicuro, valuta di aggiungere un auth server-si
 **Vedo i dati vecchi anche dopo un push?**
 → Bump `CACHE_NAME` in `sw.js` e pusha. Oppure tocca **🔄 Aggiorna app** dal telefono.
 
-**L'auth non funziona più dopo un cambio password?**
-→ Il browser ha ancora il vecchio `auth.js` in cache. Hard-refresh o bump CACHE_NAME.
+**L'app mostra ancora la pagina di login dopo l'aggiornamento?**
+→ Il browser ha ancora il vecchio SW cached. Apri l'app → tocca **🔄 Aggiorna app** oppure bump CACHE_NAME in `sw.js`.
 
 **Portainer dice "permission denied" su GitHub?**
 → Per repo privati, in Portainer vai su **Settings → Git Credentials** e configura un Personal Access Token di GitHub.
