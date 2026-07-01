@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1b4332">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Orto">
+  <title>💰 Orto - Prezzi</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .price-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem 0; border-bottom: 1px solid var(--border); }
+    .price-row:last-child { border-bottom: none; }
+    .price-row .veg-emoji { font-size: 1.2rem; flex-shrink: 0; }
+    .price-row .veg-name { flex: 1; font-weight: 600; font-size: 0.95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .price-row .veg-total { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
+    .price-row .price-input-wrap { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+    .price-row .price-input {
+      width: 80px;
+      padding: 0.45rem 0.6rem;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-family: inherit;
+      text-align: right;
+      font-weight: 600;
+    }
+    .price-row .price-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(45,106,79,0.15); }
+    .price-row .price-input.saved { border-color: var(--success); background: var(--accent-light); }
+    .price-row .price-suffix { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .price-row .price-value { font-size: 0.85rem; color: var(--success); font-weight: 600; white-space: nowrap; min-width: 64px; text-align: right; flex-shrink: 0; }
+    .price-row .price-value.empty { color: var(--text-muted); font-weight: 400; font-style: italic; font-size: 0.78rem; min-width: 0; }
+    .value-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; font-size: 0.85rem; color: var(--text-muted); }
+    .value-row .value-amount { font-weight: 700; color: var(--success); }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+    .summary-card { background: var(--card); border-radius: var(--radius-sm); padding: 0.85rem; text-align: center; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .summary-card .summary-value { font-size: 1.4rem; font-weight: 800; color: var(--primary); }
+    .summary-card .summary-value.euro { color: var(--success); }
+    .summary-card .summary-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.2rem; }
+    .bulk-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .bulk-bar input { flex: 1; padding: 0.55rem 0.75rem; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; font-family: inherit; }
+    .bulk-bar input:focus { outline: none; border-color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <h1>💰 Prezzi</h1>
+      <nav>
+        <a href="/">Raccolta</a>
+        <a href="/stats.html">Statistiche</a>
+        <a href="/prezzi.html" class="active">Prezzi</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="value-card">
+      <div class="stat-value" id="grandValue">€0,00</div>
+      <div class="stat-label">Valore Totale Raccolto</div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-value" id="sumWeight">0 g</div>
+        <div class="summary-label">Peso totale</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" id="sumPriced">0</div>
+        <div class="summary-label">Ortaggi con prezzo</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Prezzo al kg per Ortaggio</div>
+      <div class="bulk-bar">
+        <input type="number" id="bulkPriceInput" step="0.01" min="0" placeholder="Es: 2.50">
+        <button class="btn btn-secondary btn-sm" id="bulkApplyBtn" title="Applica a tutti gli ortaggi senza prezzo">Applica a vuoti</button>
+      </div>
+      <div id="priceList">
+        <div class="empty-state"><div class="emoji">🌱</div><p>Caricamento…</p></div>
+      </div>
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;">💡 I prezzi vengono salvati automaticamente quando modifichi un campo (l'input si evidenzia in verde).</p>
+    </div>
+
+    <p class="storage-info" id="storageInfo">Caricamento…</p>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = '';
+    let vegetables = [];
+    let harvests = [];
+    let saveTimers = new Map();
+
+    document.addEventListener('DOMContentLoaded', loadAll);
+
+    async function api(method, url, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(API + url, opts);
+      if (!res.ok) {
+        let err = 'Errore ' + res.status;
+        try { const j = await res.json(); err = j.error || err; } catch {}
+        throw new Error(err);
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    async function loadAll() {
+      try {
+        const [vegRes, harvRes, statsRes] = await Promise.all([
+          api('GET', '/api/vegetables'),
+          api('GET', '/api/harvests'),
+          api('GET', '/api/stats')
+        ]);
+        vegetables = vegRes;
+        harvests = harvRes;
+        renderPriceList();
+        renderSummary(statsRes);
+        document.getElementById('storageInfo').textContent = `Backend connesso ✓ · ${vegetables.length} ortaggi · ${harvests.length} raccolte`;
+      } catch (e) {
+        showToast('❌ Backend non raggiungibile: ' + e.message, true);
+        document.getElementById('storageInfo').textContent = '❌ Backend non raggiungibile';
+      }
+    }
+
+    function renderSummary(stats) {
+      const grandValue = (stats.grand_value || 0);
+      const grandWeight = (stats.grand_total || 0);
+      document.getElementById('grandValue').textContent = formatValue(grandValue);
+      document.getElementById('sumWeight').textContent = formatWeight(grandWeight);
+      document.getElementById('sumPriced').textContent =
+        vegetables.filter(v => (v.price_per_kg || 0) > 0).length;
+    }
+
+    function totalWeightForVeg(vegId) {
+      return harvests
+        .filter(h => h.vegetable_id === vegId)
+        .reduce((s, h) => s + Number(h.weight || 0), 0);
+    }
+
+    function renderPriceList() {
+      const c = document.getElementById('priceList');
+      if (vegetables.length === 0) {
+        c.innerHTML = `<div class="empty-state"><div class="emoji">🥬</div><p>Nessun ortaggio ancora.<br>Aggiungine uno dalla scheda Ortaggi / Raccolta.</p></div>`;
+        return;
+      }
+      c.innerHTML = vegetables
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, 'it'))
+        .map(v => {
+          const totalG = totalWeightForVeg(v.id);
+          const price = Number(v.price_per_kg || 0);
+          const value = (totalG / 1000) * price;
+          const valueStr = price > 0 ? formatValue(value) : '';
+          return `
+          <div class="price-row" data-id="${v.id}">
+            <span class="veg-emoji">🥬</span>
+            <span class="veg-name" title="${escapeHtml(v.name)}">${escapeHtml(v.name)}</span>
+            <div class="price-input-wrap">
+              <input type="number" class="price-input" data-id="${v.id}"
+                step="0.01" min="0" inputmode="decimal"
+                value="${price > 0 ? price : ''}" placeholder="0.00">
+              <span class="price-suffix">€/kg</span>
+            </div>
+            <div class="price-value ${price > 0 ? '' : 'empty'}">
+              ${price > 0 ? valueStr : (totalG > 0 ? formatWeight(totalG) + ' raccolti' : '—')}
+            </div>
+          </div>`;
+        }).join('');
+      c.querySelectorAll('.price-input').forEach(input => {
+        input.addEventListener('input', () => onPriceInput(input));
+        input.addEventListener('blur', () => onPriceBlur(input));
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        });
+      });
+    }
+
+    function onPriceInput(input) {
+      input.classList.remove('saved');
+      // Debounce: salva 600ms dopo l'ultimo input.
+      const id = parseInt(input.dataset.id);
+      const old = saveTimers.get(id);
+      if (old) clearTimeout(old);
+      const t = setTimeout(() => savePrice(id, input), 600);
+      saveTimers.set(id, t);
+    }
+
+    function onPriceBlur(input) {
+      const id = parseInt(input.dataset.id);
+      const old = saveTimers.get(id);
+      if (old) { clearTimeout(old); saveTimers.delete(id); }
+      savePrice(id, input);
+    }
+
+    async function savePrice(id, input) {
+      const raw = input.value.trim();
+      const price = raw === '' ? 0 : parseFloat(raw.replace(',', '.'));
+      if (isNaN(price) || price < 0) {
+        showToast('❌ Prezzo non valido', true);
+        return;
+      }
+      try {
+        const updated = await api('PUT', `/api/vegetables/${id}/price`, { price_per_kg: price });
+        const veg = vegetables.find(v => v.id === id);
+        if (veg) veg.price_per_kg = updated.price_per_kg;
+        input.classList.add('saved');
+        showToast('✅ Prezzo salvato');
+        // Aggiorna riga (valore calcolato) e totali sommari.
+        renderPriceList();
+        try {
+          const stats = await api('GET', '/api/stats');
+          renderSummary(stats);
+        } catch (_) {}
+      } catch (err) {
+        showToast('❌ ' + err.message, true);
+      }
+    }
+
+    document.getElementById('bulkApplyBtn').addEventListener('click', async () => {
+      const inp = document.getElementById('bulkPriceInput');
+      const raw = inp.value.trim();
+      const price = raw === '' ? NaN : parseFloat(raw.replace(',', '.'));
+      if (isNaN(price) || price < 0) {
+        showToast('❌ Inserisci un prezzo valido', true);
+        return;
+      }
+      const targets = vegetables.filter(v => !(v.price_per_kg > 0));
+      if (targets.length === 0) {
+        showToast('ℹ️ Tutti gli ortaggi hanno già un prezzo');
+        return;
+      }
+      if (!confirm(`Applicare €${price.toFixed(2)}/kg a ${targets.length} ortaggi senza prezzo?`)) return;
+      const btn = document.getElementById('bulkApplyBtn');
+      btn.disabled = true; btn.textContent = '⏳…';
+      try {
+        await Promise.all(targets.map(v =>
+          api('PUT', `/api/vegetables/${v.id}/price`, { price_per_kg: price })
+            .then(updated => { v.price_per_kg = updated.price_per_kg; })
+        ));
+        inp.value = '';
+        showToast(`✅ Prezzo applicato a ${targets.length} ortaggi`);
+        await loadAll();
+      } catch (err) {
+        showToast('❌ ' + err.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Applica a vuoti';
+      }
+    });
+
+    function formatWeight(g) {
+      const n = Number(g) || 0;
+      if (n >= 1000) return (n / 1000).toFixed(2).replace(/\.00$/, '') + ' kg';
+      return Math.round(n) + ' g';
+    }
+    function formatValue(v) {
+      const n = Number(v) || 0;
+      return '€' + n.toFixed(2).replace('.', ',');
+    }
+    function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = 'toast' + (isError ? ' error' : '');
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

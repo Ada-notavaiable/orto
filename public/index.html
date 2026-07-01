@@ -54,6 +54,7 @@
       <nav>
         <a href="/" class="active">Raccolta</a>
         <a href="/stats.html">Statistiche</a>
+        <a href="/prezzi.html">Prezzi</a>
       </nav>
     </div>
   </header>
@@ -74,8 +75,9 @@
             <p class="veg-hint">Manca un ortaggio? <button type="button" data-go-ortaggi>Aggiungilo nella scheda Ortaggi</button></p>
           </div>
           <div class="form-group">
-            <label for="weightInput">Peso (kg)</label>
-            <input type="number" id="weightInput" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal" required>
+            <label for="weightInput">Peso (g)</label>
+            <input type="number" id="weightInput" step="1" min="1" placeholder="0" inputmode="numeric" required>
+            <p class="veg-hint" id="priceHint" style="display:none;"></p>
           </div>
           <div class="form-group">
             <label for="dateInput">Data</label>
@@ -131,8 +133,8 @@
           <div id="editVegSelectContainer"></div>
         </div>
         <div class="form-group">
-          <label for="editWeight">Peso (kg)</label>
-          <input type="number" id="editWeight" step="0.01" min="0.01" inputmode="decimal" required>
+          <label for="editWeight">Peso (g)</label>
+          <input type="number" id="editWeight" step="1" min="1" inputmode="numeric" required>
         </div>
         <div class="form-group">
           <label for="editDate">Data</label>
@@ -183,7 +185,10 @@
       document.body.addEventListener('click', (e) => {
         const go = e.target.closest('[data-go-ortaggi]');
         if (go) switchToTab('ortaggi');
+        const goPrezzi = e.target.closest('[data-go-prezzi]');
+        if (goPrezzi) location.href = '/prezzi.html';
       });
+      document.getElementById('weightInput').addEventListener('input', updatePriceHint);
     });
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -240,6 +245,31 @@
       const opts = vegetables.slice().sort((a, b) => a.name.localeCompare(b.name, 'it'))
         .map(v => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('');
       c.innerHTML = `<select id="vegInput" required><option value="">— Seleziona ortaggio —</option>${opts}</select>`;
+      const sel = document.getElementById('vegInput');
+      if (sel) sel.addEventListener('change', updatePriceHint);
+      updatePriceHint();
+    }
+
+    function updatePriceHint() {
+      const hint = document.getElementById('priceHint');
+      if (!hint) return;
+      const vegSel = document.getElementById('vegInput');
+      const weightInp = document.getElementById('weightInput');
+      if (!vegSel || !vegSel.value) { hint.style.display = 'none'; return; }
+      const veg = vegetables.find(v => v.id === parseInt(vegSel.value));
+      if (!veg) { hint.style.display = 'none'; return; }
+      const price = Number(veg.price_per_kg || 0);
+      const w = parseFloat(weightInp.value);
+      if (price <= 0) {
+        hint.innerHTML = `Nessun prezzo per <strong>${escapeHtml(veg.name)}</strong>. <button type="button" data-go-prezzi style="background:none;border:none;color:var(--primary);font-weight:600;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;">Impostalo nella scheda Prezzi</button>`;
+        hint.style.display = 'block';
+      } else {
+        const est = (!isNaN(w) && w > 0) ? formatValue((w / 1000) * price) : '';
+        let txt = `Prezzo <strong>${escapeHtml(veg.name)}</strong>: ${formatValue(price)}/kg`;
+        if (est) txt += ` → Valore stimato: <strong>${est}</strong>`;
+        hint.innerHTML = txt;
+        hint.style.display = 'block';
+      }
     }
     function renderEditVegSelect(selectedId) {
       const c = document.getElementById('editVegSelectContainer');
@@ -281,7 +311,9 @@
         c.innerHTML = `<div class="empty-state"><div class="emoji">🌱</div><p>Nessuna raccolta ancora.<br>Inizia ad aggiungere!</p></div>`;
         return;
       }
-      c.innerHTML = harvests.map(h => `
+      c.innerHTML = harvests.map(h => {
+        const valueStr = (typeof h.value === 'number' && h.value > 0) ? formatValue(h.value) : '';
+        return `
         <div class="harvest-item" data-id="${h.id}">
           <div class="harvest-icon">🥬</div>
           <div class="harvest-info">
@@ -291,8 +323,12 @@
               ${h.notes ? `<span>📝 ${escapeHtml(h.notes)}</span>` : ''}
             </div>
           </div>
-          <div class="harvest-weight">${h.weight} kg</div>
-        </div>`).join('');
+          <div class="harvest-right">
+            <div class="harvest-weight">${formatWeight(h.weight)}</div>
+            ${valueStr ? `<div class="harvest-value">${valueStr}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
       c.querySelectorAll('.harvest-item').forEach(el => {
         el.addEventListener('click', () => openEdit(parseInt(el.dataset.id)));
       });
@@ -531,6 +567,16 @@
 
     // Utils
     function formatDate(d) { const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
+    function formatWeight(g) {
+      const n = Number(g) || 0;
+      // Smart format: grammi sotto 1 kg, kg con 1 decimale sopra.
+      if (n >= 1000) return (n / 1000).toFixed(2).replace(/\.00$/, '') + ' kg';
+      return Math.round(n) + ' g';
+    }
+    function formatValue(v) {
+      const n = Number(v) || 0;
+      return '€' + n.toFixed(2).replace('.', ',');
+    }
     function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
