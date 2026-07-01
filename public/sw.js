@@ -1,4 +1,4 @@
-// Service Worker per OrtPWA (con backend Express).
+// Service Worker per Orto (con backend Express).
 // Strategia: API sempre via network; file statici cache-first con
 // navigazione offline di fallback.
 // Bump CACHE_NAME su ogni deploy per forzare l'aggiornamento sui client.

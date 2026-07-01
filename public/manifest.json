@@ -1,6 +1,6 @@
 {
-  "name": "OrtPWA - Raccolto Orto",
-  "short_name": "OrtPWA",
+  "name": "Orto",
+  "short_name": "Orto",
   "description": "Traccia il peso degli ortaggi raccolti dal tuo orto",
   "start_url": "./",
   "scope": "./",

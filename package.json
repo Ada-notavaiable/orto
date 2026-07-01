@@ -1,5 +1,5 @@
 {
-  "name": "orto-pwa",
+  "name": "orto",
   "version": "1.0.0",
   "description": "PWA per tracciare il peso degli ortaggi raccolti dall'orto",
   "main": "server.js",

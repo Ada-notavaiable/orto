@@ -1,4 +1,4 @@
-// server.js — Backend Express + SQLite (via sql.js) per OrtPWA.
+// server.js — Backend Express + SQLite (via sql.js) per Orto.
 // Persiste i dati in un singolo file (orto.db) montato come volume Docker.
 
 const express = require('express');
@@ -402,7 +402,7 @@ process.on('SIGTERM', () => { saveDBSync(); process.exit(0); });
 
 initDB().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌿 OrtPWA running at http://localhost:${PORT}`);
+    console.log(`🌿 Orto running at http://localhost:${PORT}`);
   });
 }).catch(err => {
   console.error('Failed to init DB:', err);

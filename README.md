@@ -1,4 +1,4 @@
-# 🌿 OrtPWA — Raccolto Orto
+# 🌱 Orto — Raccolto Orto
 
 PWA (Progressive Web App) per tracciare il peso degli ortaggi raccolti dall'orto. Backend **Express + SQLite** in container **Docker**, gestibile via **Portainer** su Raspberry Pi, Orange Pi, o qualsiasi Docker host. **Niente SSH** — pubblichi il codice su GitHub e Portainer fa build + deploy da solo.
 
@@ -44,7 +44,7 @@ PWA (Progressive Web App) per tracciare il peso degli ortaggi raccolti dall'orto
 cd orto
 git init
 git add .
-git commit -m "Initial commit: OrtPWA"
+git commit -m "Initial commit: Orto"
 git branch -M main
 git remote add origin https://github.com/<tuo-username>/orto.git
 git push -u origin main
